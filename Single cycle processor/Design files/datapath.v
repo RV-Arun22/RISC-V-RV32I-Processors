@@ -23,7 +23,9 @@
 module datapath(
     input clk, rst,
     input RF_WEN, DM_WEN,                       //write enables to RF and DM
-    input sel_srcB, sel_ld, br_taken,           //srcB, load & branch target(PC source) select signals
+    input sel_srcB,                             //srcB select signal
+    input [1:0] sel_ld,                         //RF write (load) in source select signal
+    input br_taken,                             //Branch target(PC source) select signal
     input[1:0] sel_imm,                         //immediate field selecct signals
     input [1:0] sel_s, sel_l, sel_exec_out,     //Exec_unit operation select signals
     input sel_a,sel_comp,
@@ -31,7 +33,7 @@ module datapath(
     output z, c, n                              //ALU flags
     ); 
     wire [4:0] rs1, rs2, rd;    //Register address fields
-    wire [31:0] rf_wd, rf_rd2, dm_rd, dm_wd;            //RF write in, RF read ou port2, DM read out & DM write in lines
+    reg [31:0] rf_wd; wire [31:0] rf_rd2, dm_rd, dm_wd; //RF write in, RF read ou port2, DM read out & DM write in lines
     wire [31:0] srcA, srcB, imm, exec_out;              //Exec(ALU) data inputs & Imm module output
     wire [31:0] pc_nxt, nxt_instr, pc_trgt;             //Next instr addr to PC, PC input wire & Branch target to PC
     reg [31:0] pc;                                      //PC register
@@ -44,11 +46,19 @@ module datapath(
     
     //Mux logic assignments
     assign srcB = ((sel_srcB)? imm : rf_rd2);               //srcB select mux
-    assign rf_wd = ((sel_ld)? dm_rd : exec_out);            //RF write in data select
+    
+    always @ (*)                                            //RF write in data select mux
+        begin
+            case(sel_ld)
+                2'b00: rf_wd = exec_out;    //ALU output
+                2'b10: rf_wd = dm_rd;       //Data mem value (lw instr)
+                2'b01: rf_wd = nxt_instr;   //pc + 4 value (J-type)
+            endcase
+        end          
     
     assign pc_nxt = ((br_taken)? pc_trgt : nxt_instr);      //PC value-in mux
     assign pc_trgt = pc + imm;                              //Branch target value
-    assign nxt_instr = pc + 'd1;                            //Next instruction is the next 32-bit location, so +1 
+    assign nxt_instr = pc + 'd4;                            //Next instruction is the next word location, so +4 
 
     always  @ (posedge clk)
         begin       
